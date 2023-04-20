@@ -1,0 +1,959 @@
+(function (window, document) {
+
+  "use strict";
+
+  function _configureJsSuggestiveAds() {
+
+    var sugg = JumpstartSuggestiveAds();
+
+    var winLoc = window.location.origin || window.location.protocol+'//'+window.location.hostname;
+
+    var w = window,d = document,e = d.documentElement,g = d.getElementsByTagName('body')[0],
+    ww = w.innerWidth || e.clientWidth || g.clientWidth, wh = w.innerHeight || e.clientHeight || g.clientHeight;
+
+    var jAdSlot = {
+      debug: false,
+      debugParam: "suggdeb",
+      pubPrefix: "usnauto",
+      site: null,
+      adsReady: false,
+      network: {
+        jamId: "36117602,4020"
+      },
+      slots: {
+        qty: 4
+      },
+      extraSlots: {
+        needed: false,
+        qty: 1,
+        startDate: new Date('2017-04-24T08:00:00'),
+        endDate: new Date('2017-06-01T00:00:00'),
+        todaysDate: new Date()
+      },
+      replacementKey: null,
+      labelUsed: null,
+      currDomain: winLoc,
+      ww: ww,
+      wh: wh
+    };
+
+    if (sugg.dateInBetween(jAdSlot.extraSlots.startDate, jAdSlot.extraSlots.endDate, jAdSlot.extraSlots.todaysDate)) {
+      jAdSlot.slots.qty = jAdSlot.slots.qty + jAdSlot.extraSlots.qty;
+    }
+
+    sugg.setAdObj(jAdSlot);
+    if (sugg.gup((window.location != window.parent.location) ? document.referrer : document.location.href, jAdSlot.debugParam) === "true" || jAdSlot.debug === true) {
+      sugg.setDebug("true");
+      console.log("[SUGG] Current Domain: ", jAdSlot.currDomain);
+      console.log("[SUGG] " + jAdSlot.slots.qty + " Slots To Be Created");
+    }
+    sugg.setPublisher(jAdSlot.pubPrefix);
+    sugg.setSite(jSite);
+    sugg.setAdUnit(jAdUnit);
+
+    return sugg;
+  }
+
+  function JumpstartSuggestiveAds()
+  {
+
+    var priv = {
+
+      adObj: null,
+      adInfo: null,
+      pubInfo: null,
+      adJsUrl: null,
+      ads: {
+        info: {},
+        qty: 0,
+        ttlAds: 0,
+        jamQty: 0,
+        jamTtlAds: 0
+      },
+      suggAds: {},
+      jamSuggAds: {},
+      loops: {
+        edi: 0,
+        jamEdi: 0
+      },
+
+      whenAvail: function(name, callback) {
+        var i = 10; // ms
+        window.setTimeout(function check() {
+          if (window[name]) {
+            callback();
+          } else {
+            window.setTimeout(check, i);
+          }
+        }, i);
+      },
+
+      // Checks if date is in between a start and end date
+      dateInBetween: function(s,e,t) {
+        if (t >= s && t <= e) {
+          return true;
+        } else {
+          return false;
+        }
+      },
+
+      getRandumNum: function() {
+        var ran = Math.random() + '';
+        return ran * 10000000000000;
+      },
+
+      getUrlParams: function(url, name)
+      {
+        name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
+        var regexS = "[\\?&]"+name+"=([^&#]*)";
+        var regex = new RegExp(regexS);
+        var results = regex.exec(url);
+        if(results === null) {
+          return "";
+        } else {
+          return results[1];
+        }
+      },
+
+      stripSiteAdUnitSlashes: function(str) {
+        if (str) {
+          if (str.charAt(0) == "/") { str = str.substr(1); }
+          if (str.indexOf(priv.adObj.network.jamId + "/") > -1) { str = str.substr(9); }
+          if (str.charAt(str.length - 1) == "/") { str = str.substr(0, str.length - 1); }
+          return str;
+        } else {
+          return null;
+        }
+      },
+
+      getStyleToReplace: function(pubInfo, adInfo) {
+        if (adInfo.category in pubInfo.categories) {
+          var s = pubInfo.categories[adInfo.category].hook;
+          if (priv.adObj.debug) {
+            console.log('[SUGG] getStyleToReplace - s: "' + s + '"');
+          }
+          if (s) { return s; } else { return null; }
+        } else {
+          return null;
+        }
+      },
+
+      checkForGrid: function(pubInfo, adObj) {
+        var bsg = null;
+        for (var i=0, tot=pubInfo.label.length; i < tot; i++) {
+          if (pubInfo.label[i]) {
+            if (pubInfo.labelType == 'id') {
+              bsg = document.getElementById(pubInfo.label[i]);
+            }
+            if (pubInfo.labelType == 'class') {
+              bsg = document.getElementsByClassName(pubInfo.label[i])[0];
+              priv.adObj.labelUsed = pubInfo.label[i];
+            }
+            if (pubInfo.labelType == 'custom') {
+              bsg = document.getElementsByTagName(pubInfo.label[i])[0];
+              priv.adObj.labelUsed = pubInfo.label[i];
+            }
+            if (typeof bsg == 'object') { break; } else { bsg = null; }
+          }
+        }
+
+        if (adObj.debug) {
+          console.log('[SUGG] checkForGrid - label: ' + pubInfo.label + ' - type: ' + pubInfo.labelType + ' - used: ' + priv.adObj.labelUsed);
+          console.log('[SUGG] checkForGrid - bsg: ', bsg);
+        }
+
+        // check to see if the grid is even visible on the page
+        if (bsg && !bsg.offsetParent) {
+          bsg = null;
+
+          if (adObj.debug) {
+            console.log('[SUGG] checkForGrid - setting null because grid isnt visible');
+          }
+        }
+
+        return bsg;
+
+      },
+
+      createListeners: function() {
+
+        window.addEventListener("message", function(e) { //NOSONAR
+
+          var origin = e.origin || e.originalEvent.origin;
+
+          if ( origin.indexOf("googlesyndication.com") > -1 ) {
+
+            if (e.data.task) {
+              if (e.data.task == 'suggloaded') {
+
+                if (e.data.adunit.indexOf(priv.adObj.site) > -1) {
+                  priv.jamSuggAds[priv.loops.jamEdi] = { network: priv.adObj.network.jamId };
+                  priv.jamSuggAds[priv.loops.jamEdi].content = e.data;
+                  if (priv.adObj.debug) {
+                    console.log('[SUGG] createListeners - jamSuggAds ORIG (' + priv.loops.jamEdi + '): ', priv.jamSuggAds[priv.loops.jamEdi], ' - origin: ', origin);
+                  }
+                  priv.loops.jamEdi++;
+                }
+
+              }
+            }
+
+          }
+
+        }, false);
+
+      },
+
+      prepareClickTag: function(url, type) {
+
+        var up;
+
+        switch(type) {
+          case "DCM":
+            // add ?
+            up = url + "?";
+            break;
+          case "Sizmek":
+            // add &rtu= and replace [timestamp] if necessary
+            up = url.replace("[timestamp]", priv.getRandumNum) + "&rtu=";
+            break;
+          case "FlashTalking":
+            // cut off everything after the &url=
+            up = url.substring(0, url.indexOf('&url=') + 5);
+            break;
+          default:
+            up = url + "?";
+            break;
+        }
+
+        if (priv.adObj.debug) {
+          console.log('[SUGG] prepareClickTag - type: ', type);
+          console.log('[SUGG] prepareClickTag - up: ', up);
+        }
+
+        return up;
+
+      },
+
+      parseAdInfo: function(ad) {
+
+        if (priv.adObj.debug) {
+          console.log('[SUGG] parseAdInfo - Begin');
+        }
+
+        var jAd = {};
+
+        jAd.category = ad.category.toLowerCase();
+
+        if (jAd.category == "luxury car") { jAd.category = "luxury"; }
+        if (jAd.category == "sports car") { jAd.category = "sports"; }
+        if (jAd.category == "hybrid-electric") { jAd.category = "hybrid"; }
+
+        jAd.head = ad.vehicleName;
+        jAd.imgOne = ad.image.left;
+        jAd.imgTwo = ad.image.leftQtr;
+        jAd.url = ad.clickTag.dfp + priv.prepareClickTag(ad.clickTag.url, ad.clickTag.type);
+
+        if (priv.adObj.debug) {
+          console.log('[SUGG] parseAdInfo - Category: ' + jAd.category);
+          console.log('[SUGG] parseAdInfo - Headline: ' + jAd.head);
+          console.log('[SUGG] parseAdInfo - IMG SRC: ', jAd.imgOne);
+          console.log('[SUGG] parseAdInfo - IMG SRC 3/4: ', jAd.imgTwo);
+          console.log('[SUGG] parseAdInfo - URL: ', jAd.url);
+          console.log('[SUGG] parseAdInfo - End');
+        }
+
+        return jAd;
+
+      },
+
+      createAdDivs: function() {
+
+        // Create a divs for the slots
+        var jagBody = document.body || document.getElementsByTagName('body')[0];
+
+        var suggDiv = document.createElement('div');
+        suggDiv.id = "jagSuggestive";
+        suggDiv.style.width = "0px";
+        suggDiv.style.height = "0px";
+        suggDiv.style.display = "none";
+
+        // Create Divs - QTY determined by slots.qty + extraSlots.qty
+        var suggDivAd = [];
+        var jamSuggDivAd = [];
+        for (var i=0, s=priv.adObj.slots.qty; i < s; i++) {
+
+          jamSuggDivAd[i] = document.createElement('div');
+          jamSuggDivAd[i].id = "jam_adSuggestive" + (i + 1);
+          jamSuggDivAd[i].style.width = "0px";
+          jamSuggDivAd[i].style.height = "0px";
+          suggDiv.appendChild(jamSuggDivAd[i]);
+
+        }
+
+        jagBody.appendChild(suggDiv);
+
+        if (priv.adObj.debug) {
+          console.log("[SUGG] createAdDivs - " + priv.adObj.slots.qty + " Slots Created - suggDiv: ", suggDiv);
+        }
+
+      },
+
+      setTotalAds: function(ad) {
+
+        if (priv.adObj.debug) {
+          console.log('[SUGG] setTotalAds - sei index: ', ad.slotElementId.indexOf("adSuggestive"));
+        }
+
+        if (ad.slotElementId.indexOf("adSuggestive") === 4) {
+
+          priv.ads.jamQty++;
+
+          if (!ad.isEmpty) {
+
+            priv.ads.jamTtlAds++;
+
+            if (priv.adObj.debug) {
+              console.log('[SUGG] setTotalAds - jam ad.isEmpty: ', ad.isEmpty);
+            }
+
+          }
+
+          if (priv.adObj.debug) {
+            console.log('[SUGG] setTotalAds - jam ads needed: ' + priv.adObj.slots.qty + ' - jamQty: ' + priv.ads.jamQty + ' - jamfilled: ' + priv.ads.jamTtlAds);
+          }
+
+          if (priv.ads.jamQty == priv.adObj.slots.qty) {
+
+            if (priv.adObj.debug) {
+              console.log('[SUGG] setTotalAds - jamTtlAds: ', priv.ads.jamTtlAds);
+            }
+
+            priv.displayAdInfo(priv.ads.jamTtlAds, priv.jamSuggAds);
+
+          }
+        }
+
+      },
+
+      displayAdInfo: function(amt, ads) {
+
+        // Called by "setTotalAds" from "loadAndDisplayAds" GPT event listener "slotRenderEnded" calls ads
+        // Calls "replaceAds"
+
+        var i = 0;
+
+        var sInt = setInterval(function(){
+
+          if (priv.adObj.debug) {
+            console.log('[SUGG] displayAdInfo - Int: ' + i + ' - Amt: ' + amt + ' - Len: ' + Object.keys(ads).length);
+          }
+
+          if (Object.keys(ads).length == amt || i == 50) {
+
+            clearInterval(sInt);
+
+            if (priv.adObj.debug) {
+              console.log('[SUGG] displayAdInfo - ads (suggAds | jamSuggAds) FINAL: ', ads);
+            }
+
+            if (Object.keys(ads).length == amt) {
+              priv.replaceAds(ads);
+            }
+
+          }
+
+          i++;
+
+        }, 500);
+
+      },
+
+      loadAndDisplayAds: function() {
+
+        if (priv.adObj.debug) {
+          console.log('[SUGG] loadAndDisplayAds - Begin');
+        }
+
+        var gptAdSlotsAdded = {};
+        var siteAdUnit, jamSiteAdUnit;
+        var site = priv.stripSiteAdUnitSlashes(priv.adObj.site);
+        var adUnit = priv.stripSiteAdUnitSlashes(priv.adObj.adunit);
+
+        if (priv.adObj.debug) {
+          console.log('[SUGG] loadAndDisplayAds - site: ', site);
+          console.log('[SUGG] loadAndDisplayAds - initial ad unit: ', adUnit);
+        }
+
+        if (site === adUnit) {
+          siteAdUnit = site;
+          jamSiteAdUnit = site;
+        } else {
+          if (adUnit !== 'undefined' && adUnit !== null) { adUnit = "/" + adUnit; } else { adUnit = ""; }
+          siteAdUnit = site + adUnit;
+          jamSiteAdUnit = site + adUnit;
+        }
+
+        if (priv.adObj.debug) {
+          console.log('[SUGG] loadAndDisplayAds - updated ad unit: ', adUnit);
+          console.log('[SUGG] loadAndDisplayAds - final 36117602 ad unit: ', jamSiteAdUnit);
+        }
+
+        if (siteAdUnit || jamSiteAdUnit) {
+
+          if (priv.adObj.debug) {
+            console.log('[SUGG] loadAndDisplayAds - Begin - Creating slots...');
+          }
+
+          googletag.cmd.push(function() {
+
+            for (var a=0, as=priv.adObj.slots.qty; a < as; a++) {
+
+              var sltNum = 'adSuggestive' + (a + 1);
+
+              // Jumpstart Publisher Demo Only
+              if (typeof jPd === 'object') {
+
+                // Configure separate ad units
+                siteAdUnit = jPd.jam.adUnits.lvl1 + jPd.jam.adUnits.lvl2 + jPd.jam.adUnits.lvl3;
+                jamSiteAdUnit = jPd.hearst.adUnits.lvl1 + jPd.hearst.adUnits.lvl2 + jPd.hearst.adUnits.lvl3;
+
+                if (priv.adObj.debug) {
+                  console.log('[SUGG] loadAndDisplayAds - jPd 36117602 ad unit: ', jamSiteAdUnit);
+                }
+
+                // Set jamtest targeting
+                googletag.pubads().setTargeting(jPd.targeting.jamtest.key, jPd.targeting.jamtest.val);
+
+              }
+
+              gptAdSlotsAdded['jam_' + sltNum] = googletag.defineSlot('/' + priv.adObj.network.jamId + '/' + jamSiteAdUnit, 'fluid', 'jam_' + sltNum)
+                            .setTargeting("slot", "suggestive")
+                            .addService(googletag.pubads());
+
+            }
+
+            // Event Listener for when ads load and display
+            googletag.pubads().addEventListener('slotRenderEnded', function(event) {
+
+              // Retrieve Slot Info
+              var jslotId = String(event.slot.getSlotId());
+              var jlen = jslotId.length;
+              var jundrPos = jslotId.search("_");
+              var jsid = jslotId.substring(jundrPos + 1,jlen);
+
+              priv.ads.info[jsid] = {
+                id: jsid,
+                isEmpty: event.isEmpty,
+                slotId: jslotId,
+                size: (event.size ? event.size : [0, 0]),
+                creativeId: event.creativeId,
+                lineItemId: event.lineItemId,
+                slotElementId: event.slot.getSlotElementId()
+              };
+
+              if (priv.adObj.debug) {
+                console.log('[SUGG] loadAndDisplayAds - SEI: ' + priv.ads.info[jsid].slotElementId + ' - isEmpty: ', priv.ads.info[jsid].isEmpty, ' - Creative ID: ' + priv.ads.info[jsid].creativeId + ' - Line Item ID: ' + priv.ads.info[jsid].lineItemId + ' - Size: ' + priv.ads.info[jsid].size[0] + 'x' + priv.ads.info[jsid].size[1] + ' - Slot id: ' + priv.ads.info[jsid].slotId);
+              }
+
+              priv.setTotalAds(priv.ads.info[jsid]);
+
+            });
+
+            if (priv.adObj.debug) {
+              console.log('[SUGG] loadAndDisplayAds - Begin - Displaying slots...');
+            }
+
+            for (var d=0, ds=priv.adObj.slots.qty; d < ds; d++) {
+              googletag.display('adSuggestive' + (d + 1));
+              googletag.display('jam_adSuggestive' + (d + 1));
+              if (priv.adObj.debug) { console.log('[SUGG] loadAndDisplayAds - Displaying - "adSuggestive' + (d + 1) + '"'); }
+              if (priv.adObj.debug) { console.log('[SUGG] loadAndDisplayAds - Displaying - "jam_adSuggestive' + (d + 1) + '"'); }
+            }
+
+            if (priv.adObj.debug) {
+              console.log('[SUGG] loadAndDisplayAds - Publisher: "' + priv.adObj.publisher + '"');
+            }
+
+          });
+
+        }
+
+        if (priv.adObj.debug) {
+          console.log('[SUGG] loadAndDisplayAds - End');
+        }
+
+      },
+
+      replaceAds: function(ads) {
+
+        if (priv.adObj.debug) {
+          console.log('[SUGG] replaceAds - ads: ', ads);
+        }
+
+        var rplced = [];
+        var jamRplced = [];
+
+        if (priv.ads.jamQty > 0 && typeof ads[0] !== "undefined") {
+
+          if (ads[0].network === priv.adObj.network.jamId) {
+
+            if (priv.adObj.debug) {
+              console.log('[SUGG] replaceAds - jamQty: ', priv.ads.jamQty);
+            }
+
+            for (var i=0, tot=priv.ads.jamQty; i < tot; i++) {
+
+              if (typeof ads[i] !== "undefined") {
+
+                var adInfo = priv.parseAdInfo(ads[i].content);
+                pub.setAdInfo(adInfo);
+                pub.setStyleToReplace(priv.pubInfo,adInfo);
+
+                if (priv.adObj.debug) {
+                  console.log('[SUGG] replaceAds - index: ', jamRplced.indexOf(priv.adObj.replacementKey));
+                }
+
+                if (jamRplced.indexOf(priv.adObj.replacementKey) == -1) {
+                  var r = _jsSuggestivePub.replace(priv.adObj,adInfo);
+                  if (priv.adObj.debug) {
+                    console.log('[SUGG] replaceAds - replace info: ', r);
+                  }
+                }
+
+                jamRplced[i] = priv.adObj.replacementKey;
+
+                if (priv.adObj.debug) {
+                  console.log('[SUGG] replaceAds - jamRplced: ', jamRplced);
+                }
+
+              }
+
+            }
+
+          }
+        }
+
+      }
+
+    };
+
+    var pub = {
+
+      gup: function(url, name) {
+        return priv.getUrlParams(url, name);
+      },
+
+      setDebug: function(str) {
+        if (priv.adObj) { priv.adObj.debug = (str == 'true'); }
+      },
+
+      setAdObj: function(obj) {
+        priv.adObj = obj;
+      },
+
+      setAdInfo: function(obj) {
+        priv.adInfo = obj;
+      },
+
+      setPublisher: function(str) {
+        priv.adObj.publisher = str;
+      },
+
+      setSite: function(str) {
+        priv.adObj.site = str;
+      },
+
+      setAdUnit: function(str) {
+        priv.adObj.adunit = str;
+      },
+
+      setStyleToReplace: function(pubInfo,adInfo) {
+        priv.adObj.replacementKey = priv.getStyleToReplace(pubInfo,adInfo);
+      },
+
+      dateInBetween: function(s,e,t) {
+        return priv.dateInBetween(s,e,t);
+      },
+
+      whenAvail: function(name, callback) {
+        return priv.whenAvail(name, callback);
+      },
+
+      suggestiveReplace: function()
+      {
+
+        if (priv.adObj.debug) {
+          console.log('[SUGG] suggestiveReplace - BEGIN - for "' + priv.adObj.publisher + '" -');
+        }
+
+        priv.createListeners();
+
+        priv.pubInfo = _jsSuggestivePub.getPubInfo();
+        priv.pubInfo.grid = priv.checkForGrid(priv.pubInfo, priv.adObj);
+
+        if (priv.pubInfo.active === true && priv.pubInfo.grid) {
+
+          priv.createAdDivs();
+          priv.loadAndDisplayAds();
+
+        } else {
+
+          if (priv.adObj.debug) {
+            console.log('[SUGG] suggestiveReplace - Pub Not Active or Grid Not Found');
+          }
+
+        }
+
+      }
+
+    };
+
+    return pub;
+
+  }
+
+  function _jsMakeSuggestivePub() {
+
+    var pub = JumpstartSuggestivePublisher();
+
+    /*
+      Where do these urls live? We made strict redirects not to interfere with the escaping issues that we were having,
+      see AUTO-9516. So we're adding some entries into the django_redirects table to make sure we can have clean and pretty urls.
+
+      AKA /cars-trucks/suggestive/convertibles -> /cars-trucks/browse?body_style=convertibles&sugconvertible=true
+    */
+
+    var pubInfo = {
+      active: true,
+      name: "U.S. News",
+      label: ["style-browse"],
+      labelType: "class",
+      categories: {
+        "convertible": {
+            "qp": "&sugconvertible",
+            "hook": "convertibles",
+            "urlB": "/cars-trucks/browse?body_style=convertibles",
+            "url": "/cars-trucks/browse?body_style=convertibles",
+            "prettyUrl": "/cars-trucks/suggestive/convertibles"
+          },
+        "coupe": {
+            "qp": "&sugcoupe",
+            "hook": "small-cars",
+            "urlB": "/cars-trucks/browse?body_style=small-cars",
+            "url": "/cars-trucks/browse?body_style=small-cars",
+            "prettyUrl": "/cars-trucks/suggestive/small-cars"
+          },
+        "cpo": {
+            "qp": "?sugcpo",
+            "hook": "certified-pre-owned",
+            "urlB": "/cars-trucks/what-does-certified-pre-owned-mean",
+            "url": "/cars-trucks/what-does-certified-pre-owned-mean",
+            "prettyUrl": "/cars-trucks/suggestive/cpo"
+          },
+        "crossover": {
+            "qp": "&sugcrossover",
+            "hook": "crossovers",
+            "urlB": "/cars-trucks/browse?body_style=suvs",
+            "url": "/cars-trucks/browse?body_style=suvs",
+            "prettyUrl": "/cars-trucks/suggestive/crossovers"
+          },
+        "diesel": {
+            "qp": "sugdiesel",
+            "hook": null,
+            "urlB": null,
+            "url": null
+          },
+        "hatchback": {
+            "qp": "sughatchback",
+            "hook": null,
+            "urlB": null,
+            "url": null
+          },
+        "hybrid": {
+            "qp": "&sughybridelectric",
+            "hook": "hybrids",
+            "urlB": "/cars-trucks/browse?fuel=Hybrid",
+            "url": "/cars-trucks/browse?fuel=Hybrid",
+            "prettyUrl": "/cars-trucks/suggestive/hybrids"
+          },
+        "luxury": {
+            "qp": "&sugluxury",
+            "hook": "luxury",
+            "urlB": "/cars-trucks/browse?body_style=luxury",
+            "url": "/cars-trucks/browse?body_style=luxury",
+            "prettyUrl": "/cars-trucks/suggestive/luxury"
+          },
+        "sedan": {
+            "qp": "&sugsedan",
+            "hook": "midsize-cars",
+            "urlB": "/cars-trucks/browse?body_style=mid-size-cars",
+            "url": "/cars-trucks/browse?body_style=mid-size-cars",
+            "prettyUrl": "/cars-trucks/suggestive/mid-size-cars"
+          },
+        "sports": {
+            "qp": "&sugsportscar",
+            "hook": "sports-cars",
+            "urlB": "/cars-trucks/browse?body_style=sports-cars",
+            "url": "/cars-trucks/browse?body_style=sports-cars",
+            "prettyUrl": "/cars-trucks/suggestive/sports-cars"
+          },
+        "suv": {
+            "qp": "&sugsuv",
+            "hook": "suvs",
+            "urlB": "/cars-trucks/browse?body_style=suvs",
+            "url": "/cars-trucks/browse?body_style=suvs",
+            "prettyUrl": "/cars-trucks/suggestive/suvs"
+          },
+        "truck": {
+            "qp": "&sugtruck",
+            "hook": "trucks",
+            "urlB": "/cars-trucks/browse?body_style=trucks",
+            "url": "/cars-trucks/browse?body_style=trucks",
+            "prettyUrl": "/cars-trucks/suggestive/trucks"
+          },
+        "van": {
+            "qp": "&sugvan",
+            "hook": "vans",
+            "urlB": "/cars-trucks/browse?body_style=vans",
+            "url": "/cars-trucks/browse?body_style=vans",
+            "prettyUrl": "/cars-trucks/suggestive/vans"
+          },
+        "wagon": {
+            "qp": "&sugwagon",
+            "hook": "wagons",
+            "urlB": "/cars-trucks/browse?body_style=Wagons",
+            "url": "/cars-trucks/browse?body_style=Wagons",
+            "prettyUrl": "/cars-trucks/suggestive/wagons"
+          }
+      }
+    };
+
+    pub.setPubInfo(pubInfo);
+
+    return pub;
+
+  }
+
+  function JumpstartSuggestivePublisher()
+  {
+
+    var priv = {
+
+      pubInfo: null,
+      adObj: null,
+      adInfo: null,
+
+      convertAmpersands: function(ai, str) {
+
+        if (ai.url.indexOf("bs.serving-sys.com") > -1) {
+          str = str.replace(/&/g, "%2526");
+        } else {
+          str = str.replace(/&/g, "%26");
+        }
+
+        return str;
+
+      },
+
+      replaceAdInfo: function(pubInfo, adObj, adInfo)
+      {
+
+        var jSr = {};
+
+        jSr.bsBlock = pubInfo.grid.getElementsByClassName(adObj.replacementKey)[0];
+
+        if (jSr.bsBlock) {
+
+          jSr.bsImgOld = jSr.bsBlock.getElementsByTagName("img")[0];
+          jSr.bsImgCont = jSr.bsBlock.getElementsByTagName("a")[0];
+          jSr.bsLink = jSr.bsBlock.getElementsByTagName("a")[1];
+
+          //
+          // Put in place to URL change happening on 1/11/17.
+          // See object definition above for updated urls.
+          //
+          // if (jSr.bsLink.href.indexOf("browse") !== -1) {
+          //   jSr.pUrl = pubInfo.categories[adInfo.category].urlB;
+          // } else {
+          //   jSr.pUrl = pubInfo.categories[adInfo.category].url;
+          // }
+          jSr.pUrl = pubInfo.categories[adInfo.category].prettyUrl;
+
+          /*
+            According to Jodi, we need to double encode our params:
+            "The landing page URL is the third URL  in the chain (GAM click tracker > CM360 click tracker > landing page URL),
+            and its parameters must be double encoded. When the parameters are only single encoded,
+            they will be treated as parameters of the CM360 tracker ("https://ad.doubleclick.net/ddm/trackclk/..."),
+            not of the landing page."
+
+            UPDATE: removing this as of AUTO-9516, we will try using pretty urls.
+          */
+          // var doubleEncodeParams = encodeURIComponent(encodeURIComponent(pubInfo.categories[adInfo.category].qp + '=true'))
+          jSr.finalUrl = adInfo.url + adObj.currDomain + jSr.pUrl;
+          jSr.bsBlockWidth = jSr.bsBlock.parentElement.clientWidth;
+          jSr.bsBlock.style.position = 'relative';
+
+          if (typeof jSr.bsImgOld !== 'undefined') {
+
+            jSr.bsImgCont.setAttribute('href', jSr.finalUrl);
+            jSr.bsImgCont.setAttribute('title', adInfo.head);
+            jSr.bsImgCont.setAttribute('rel', 'nofollow');
+            jSr.bsImgCont.setAttribute('target', '_top');
+
+            jSr.bsImgOld.style.display = "none";
+
+            jSr.bsImg = document.createElement("img");
+            jSr.bsImg.id = "jam-suggestive-image-replaced";
+            jSr.bsImg.src = adInfo.imgOne;
+            jSr.bsImg.style.paddingTop = "2%";
+            jSr.bsImg.style.width = "100%";
+            jSr.bsImg.style.marginBottom = "2px";
+
+            jSr.bsImgCont.appendChild(jSr.bsImg);
+
+            jSr.bsImgText = document.createElement('span');
+            // jSr.bsImgText.style.position = 'absolute';
+            jSr.bsImgText.style.left = '0';
+            jSr.bsImgText.style.right = '0';
+            jSr.bsImgText.style.top = '0';
+            jSr.bsImgText.style.fontSize = '9px';
+            jSr.bsImgText.style.display = 'inline-block';
+            jSr.bsImgText.style.zIndex = '20';
+            jSr.bsImgText.style.margin = '0';
+            jSr.bsImgText.style.paddingLeft = '4px';
+            jSr.bsImgText.style.width = '100%';
+            jSr.bsImgText.style.textDecoration = 'none';
+            jSr.bsImgText.style.fontFamily = 'Arial,sans-serif';
+            jSr.bsImgText.style.fontWeight = 'normal';
+            jSr.bsImgText.style.textAlign = 'center';
+            jSr.bsImgText.style.lineHeight = '9px';
+            jSr.bsImgText.style.verticalAlign = 'baseline';
+            jSr.bsImgText.style.color = '#000';
+            jSr.bsImgText.innerHTML = adInfo.head;
+
+            if (adObj.ww < 639) {
+              // jSr.bsImg.style.paddingTop = "0.8rem";
+              jSr.bsImgText.style.top = '-5px';
+            }
+
+          } else {
+
+            jSr.bsImg = jSr.bsImgCont;
+
+            if (adObj.ww < 768) {
+              jSr.bsBlock.style.marginTop = '2px';
+            } else {
+              jSr.bsBlock.style.marginTop = '-6px';
+            }
+
+            jSr.bsImg.style.backgroundImage = "url('" + adInfo.imgOne + "')";
+            jSr.bsImg.style.backgroundPosition = 'center bottom 5px';
+            jSr.bsImg.style.backgroundRepeat = 'no-repeat';
+            jSr.bsImg.style.backgroundSize = '90% auto';
+            jSr.bsImg.style.display = 'block';
+            jSr.bsImg.style.width = '90px';
+            jSr.bsImg.style.height = '38px';
+            jSr.bsImg.style.textIndent = '-1000em';
+            jSr.bsImg.setAttribute('href', jSr.finalUrl);
+            jSr.bsImg.setAttribute('title', adInfo.head);
+            jSr.bsImg.setAttribute('rel', 'nofollow');
+            jSr.bsImg.setAttribute('target', '_top');
+
+            if (adObj.ww < 768) {
+              jSr.bsImg.style.marginLeft = '6px';
+            } else {
+            }
+
+            jSr.bsImgText = document.createElement('span');
+            jSr.bsImgText.style.fontSize = '9px';
+            jSr.bsImgText.style.display = 'inline-block';
+            jSr.bsImgText.style.zIndex = '20';
+            jSr.bsImgText.style.margin = '0';
+            jSr.bsImgText.style.paddingLeft = '4px';
+            jSr.bsImgText.style.width = '100%';
+            jSr.bsImgText.style.textDecoration = 'none';
+            jSr.bsImgText.style.fontFamily = 'Arial,sans-serif';
+            jSr.bsImgText.style.fontWeight = 'normal';
+            jSr.bsImgText.style.textAlign = 'left';
+            jSr.bsImgText.style.lineHeight = '9px';
+            jSr.bsImgText.style.verticalAlign = 'baseline';
+            jSr.bsImgText.style.color = '#000';
+            jSr.bsImgText.innerHTML = adInfo.head;
+
+          }
+
+          jSr.bsLink.setAttribute('href', jSr.finalUrl);
+          jSr.bsLink.setAttribute('title', adInfo.head);
+          jSr.bsLink.setAttribute('rel', 'nofollow');
+          jSr.bsLink.setAttribute('target', '_top');
+
+          jSr.bsBlock.firstChild.insertBefore(jSr.bsImgText, jSr.bsImgCont);
+          jSr.bsBlock.style.marginTop = '-19px';
+
+          if (adObj.debug) {
+            console.log('[SUGG][pub] replaceAdInfo - Begin - ' + pubInfo.name);
+            console.log('[SUGG][pub] replaceAdInfo - replacementKey: ', adObj.replacementKey);
+            console.log('[SUGG][pub] replaceAdInfo - bsBlock: ', jSr.bsBlock);
+            console.log('[SUGG][pub] replaceAdInfo - bsBlockWidth: ', jSr.bsBlockWidth);
+            console.log('[SUGG][pub] replaceAdInfo - ww: ', adObj.ww);
+            console.log('[SUGG][pub] replaceAdInfo - bsImg: ', jSr.bsImg);
+            console.log('[SUGG][pub] replaceAdInfo - bsLink: ', jSr.bsLink);
+            console.log('[SUGG][pub] replaceAdInfo - bsImgText: ', jSr.bsImgText);
+            console.log('[SUGG][pub] replaceAdInfo - End - ' + pubInfo.name);
+          }
+
+        } else {
+
+          if (adObj.debug) {
+            console.log('[SUGG][pub] replaceAdInfo - Begin - ' + pubInfo.name);
+            console.log('[SUGG][pub] replaceAdInfo - replacementKey: ', adObj.replacementKey);
+            console.log('[SUGG][pub] replaceAdInfo - BLOCK NOT FOUND');
+            console.log('[SUGG][pub] replaceAdInfo - End - ' + pubInfo.name);
+          }
+
+        }
+
+        return jSr;
+
+      }
+
+    };
+
+    var pub = {
+
+      getPubInfo: function()
+      {
+        return priv.pubInfo;
+      },
+
+      setPubInfo: function(obj)
+      {
+        priv.pubInfo = obj;
+      },
+
+      replace: function(adObj, adInfo)
+      {
+
+        var rai;
+
+        if (adObj.replacementKey) {
+          rai = priv.replaceAdInfo(priv.pubInfo, adObj, adInfo);
+        }
+
+        return rai;
+
+      }
+
+    };
+
+    return pub;
+
+  }
+
+  var _jsSuggestiveAd = _configureJsSuggestiveAds();
+  var _jsSuggestivePub = _jsMakeSuggestivePub();
+
+  _jsSuggestiveAd.whenAvail('googletag', function() { _jsSuggestiveAd.suggestiveReplace(); } );
+
+})(window, document);
