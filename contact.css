@@ -9,7 +9,7 @@ body {
     
     box-sizing: border-box;
     overflow-x: hidden;
-    font-family: monospace, monospace;
+    font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
 }
 
 #van {
@@ -270,7 +270,7 @@ hr {
 
 .btn {
     display: inline-block;
-    padding: 0.9rem 1.8rem;
+    padding: 0.6rem 1.5rem;
     font-size: 16px;
     font-weight: 700;
     color: white;
@@ -882,14 +882,14 @@ color: black;
         justify-content: space-around;
     bottom:30px;
     color: black;
-        width: 200px;
+        width: 250px;
       cursor: pointer;
         background-color: #fdee1a;
-        height: 30px;
+        height: 50px;
         /* color: white; */
-        box-shadow: 1px 1px 1px 1px;
+        /* box-shadow: 1px 1px 1px 1px; */
         font-weight: bolder;
-        font-size: 0.7rem;
+        font-size: 0.9rem;
     }
     
 
