@@ -351,7 +351,7 @@ hr {
     justify-content: space-evenly;
     margin-top: -6%;
     width: 100%;
-    height:43%;
+    height:23%;
     background-color: aqua;
     background-image: url(894274b9eebb8390d17a95f3265e9264.jpg);
     background-repeat: no-repeat;
@@ -437,7 +437,7 @@ hr {
 
 #expor {
     /* background-color: blue; */
-    height: 40%;
+    height: 5%;
     width: 100vw;
     margin: auto;
     display: flex;
@@ -790,7 +790,7 @@ hr {
 .cop {
     background-color: #fdee1a ;
     width: 100%;
-    color: white;
+    color: black;
     height: 10%;
     display: flex;
     justify-content: center;

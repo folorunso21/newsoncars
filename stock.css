@@ -597,7 +597,7 @@ a:hover {
 .cop {
     background-color: #fdee1a ;
     width: 100%;
-    color: white;
+    color: black;
     height: 10%;
     display: flex;
     justify-content: center;
