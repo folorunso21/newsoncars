@@ -651,7 +651,7 @@ hr {
     align-items: center;
     background-size: cover;
     background-repeat: no-repeat;
-    background-image: linear-gradient(to right, rgba(0, 0, 0, 0.572), rgba(0, 0, 0, 0.606), rgba(0, 0, 0, 0.305), rgba(0, 0, 0, 0.647)), url(./pexels-mike-b-120049.jpg);
+    background-image: linear-gradient(to right, rgba(0, 0, 0, 0.89), rgba(0, 0, 0, 0.877), rgba(0, 0, 0, 0.836), rgba(0, 0, 0, 0.863)), url(./pexels-mike-b-120049.jpg);
     /* background-image: url(ferrari_purosangue_34.jpg); */
     /* background-color: blue; */
 }
